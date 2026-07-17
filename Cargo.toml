@@ -1,0 +1,25 @@
+[package]
+name = "vpn"
+version = "0.1.0"
+edition = "2024"
+description = "TUI for managing Surfshark WireGuard connections"
+license = "MIT"
+repository = "https://github.com/protibimbok/vpn-cli"
+homepage = "https://github.com/protibimbok/vpn-cli"
+authors = ["Saad <sakib.saad.khan@gmail.com>"]
+
+
+[dependencies]
+async-trait = "0.1.89"
+color-eyre = "0.6.5"
+crossterm = { version = "0.29.0", features = ["event-stream"] }
+futures = "0.3.32"
+qrcode = "0.14.1"
+ratatui = "0.30.2"
+tokio = { version = "1.52.3", features = ["full"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
