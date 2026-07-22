@@ -14,6 +14,8 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
+    utils::ensure_deps()?;
+
     let runtime = tokio::runtime::Runtime::new()?;
 
     ratatui::run(|terminal| {

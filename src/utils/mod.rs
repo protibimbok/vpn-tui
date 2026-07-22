@@ -1,8 +1,10 @@
+mod deps;
 mod keys;
 mod latency;
 pub mod wg;
 mod storage;
 
+pub use deps::ensure as ensure_deps;
 pub use keys::*;
 pub use latency::*;
 pub use storage::*;
