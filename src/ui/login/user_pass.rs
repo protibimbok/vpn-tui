@@ -179,7 +179,7 @@ impl Component for UserPass {
         self.render_help(frame, help_area);
     }
 
-    fn handle_input(&mut self, event: KeyEvent) -> Action {
+    fn handle_input(&mut self, event: KeyEvent, _state: &Store) -> Action {
         match event.code {
             KeyCode::Esc => Action::Quit,
             KeyCode::Tab => {
@@ -220,7 +220,7 @@ impl Component for UserPass {
         }
     }
 
-    fn handle_mouse(&mut self, _event: MouseEvent) -> Action {
+    fn handle_mouse(&mut self, _event: MouseEvent, _state: &Store) -> Action {
         Action::None
     }
 

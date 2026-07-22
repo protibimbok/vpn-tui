@@ -6,8 +6,9 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use serde::Deserialize;
 
-use super::auth::renew_token as renew_auth;
+use super::auth::{register_public_key, renew_token as renew_auth};
 use super::error::{ApiError, Result};
+use super::servers::{fetch_servers, Server};
 
 /// Renew the access token this long before its JWT `exp` claim.
 const RENEW_MARGIN_SECS: u64 = 5 * 60;
@@ -37,6 +38,43 @@ impl AuthSession {
             self.renew_token = Some(rt);
         }
         Ok(())
+    }
+
+    fn renew_if_needed(&mut self, pub_key: &str) -> Result<()> {
+        if self.expiring_soon() {
+            self.renew(pub_key)?;
+        }
+        Ok(())
+    }
+
+    fn register_key(&mut self, pub_key: &str) -> Result<()> {
+        self.renew_if_needed(pub_key)?;
+        match register_public_key(&self.token, pub_key) {
+            Ok(()) => Ok(()),
+            Err(ApiError::Unauthorized(_)) => {
+                self.renew(pub_key)?;
+                register_public_key(&self.token, pub_key)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn fetch_servers(&mut self, pub_key: &str) -> Result<Vec<Server>> {
+        self.renew_if_needed(pub_key)?;
+        match fetch_servers(&self.token) {
+            Ok(servers) => Ok(servers),
+            Err(ApiError::Unauthorized(_)) => {
+                self.renew(pub_key)?;
+                fetch_servers(&self.token)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Register the WireGuard public key, then fetch the server list.
+    pub fn bootstrap(&mut self, pub_key: &str) -> Result<Vec<Server>> {
+        self.register_key(pub_key)?;
+        self.fetch_servers(pub_key)
     }
 }
 

@@ -31,11 +31,12 @@ impl App {
         while !self.store.should_quit {
             tokio::select! {
                 Some(event) = self.event_rx.recv() => {
-                    ui_app.handle_event(event);
+                    ui_app.handle_event(event, &self.store);
                 }
                 Some(action) = self.action_rx.recv() => {
-                    self.store.handle_action(action, &self.action_tx);
+                    self.store.handle_action(action.clone(), &self.action_tx);
                     ui_app.sync_screen(&self.store);
+                    ui_app.update(&self.store, &action);
                 }
             }
             ui_app.render(terminal, &self.store);

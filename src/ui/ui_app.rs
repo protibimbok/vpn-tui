@@ -26,7 +26,7 @@ impl UIApp {
     ) -> Self {
         let showing_servers = state.session.is_some();
         let component: Box<dyn Component> = if showing_servers {
-            Box::new(ServersPage::new())
+            Box::new(ServersPage::new(action_tx.clone()))
         } else {
             Box::new(LoginPage::new(action_tx.clone(), state.email().to_string()))
         };
@@ -46,7 +46,7 @@ impl UIApp {
         }
         self.showing_servers = want_servers;
         self.component = if want_servers {
-            Box::new(ServersPage::new())
+            Box::new(ServersPage::new(self.action_tx.clone()))
         } else {
             Box::new(LoginPage::new(
                 self.action_tx.clone(),
@@ -98,14 +98,14 @@ impl UIApp {
         })
     }
 
-    pub fn handle_event(&mut self, evt: UIEvent) {
+    pub fn handle_event(&mut self, evt: UIEvent, state: &Store) {
         match evt {
             UIEvent::Key(key) => {
                 if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
                     self.action_tx.send(Action::Quit).unwrap();
                     return;
                 }
-                let action = self.component.handle_input(key);
+                let action = self.component.handle_input(key, state);
                 if action != Action::None {
                     self.action_tx.send(action).unwrap();
                 } else if key.code == KeyCode::Char('q') {
@@ -113,11 +113,18 @@ impl UIApp {
                 }
             }
             UIEvent::Mouse(mouse) => {
-                let action = self.component.handle_mouse(mouse);
+                let action = self.component.handle_mouse(mouse, state);
                 if action != Action::None {
                     self.action_tx.send(action).unwrap();
                 }
             }
+        }
+    }
+
+    pub fn update(&mut self, state: &Store, action: &Action) {
+        let follow_up = self.component.update(state, action);
+        if follow_up != Action::None {
+            let _ = self.action_tx.send(follow_up);
         }
     }
 }

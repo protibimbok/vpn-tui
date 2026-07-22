@@ -43,7 +43,7 @@ impl Component for LoginPage {
         self.component.render(frame, area, state);
     }
 
-    fn handle_input(&mut self, event: KeyEvent) -> Action {
+    fn handle_input(&mut self, event: KeyEvent, state: &Store) -> Action {
         if event.code == KeyCode::Char('l') && event.modifiers.contains(KeyModifiers::ALT) {
             self.login_type = match self.login_type {
                 LoginType::UserPass => LoginType::QrCode,
@@ -64,15 +64,15 @@ impl Component for LoginPage {
             self.component = self.user_pass();
             return Action::CancelCodeLogin;
         }
-        let action = self.component.handle_input(event);
+        let action = self.component.handle_input(event, state);
         if action != Action::None {
             return action;
         }
         Action::None
     }
 
-    fn handle_mouse(&mut self, event: MouseEvent) -> Action {
-        self.component.handle_mouse(event)
+    fn handle_mouse(&mut self, event: MouseEvent, state: &Store) -> Action {
+        self.component.handle_mouse(event, state)
     }
 
     fn update(&mut self, state: &Store, action: &Action) -> Action {

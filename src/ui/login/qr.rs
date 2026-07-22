@@ -164,14 +164,14 @@ impl Component for QrCode {
         self.render_card(frame, area, state);
     }
 
-    fn handle_input(&mut self, event: KeyEvent) -> Action {
+    fn handle_input(&mut self, event: KeyEvent, _state: &Store) -> Action {
         match event.code {
             KeyCode::Char('r') => Action::SetQrCode,
             _ => Action::None,
         }
     }
 
-    fn handle_mouse(&mut self, _event: MouseEvent) -> Action {
+    fn handle_mouse(&mut self, _event: MouseEvent, _state: &Store) -> Action {
         Action::None
     }
 

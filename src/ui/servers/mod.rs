@@ -1,31 +1,45 @@
-use crate::{Action, Store, ui::theme::ACCENT};
-use crossterm::event::{KeyEvent, MouseEvent};
-use ratatui::{Frame, layout::Rect, style::Style, widgets::Block};
-use super::Component;
+//! Servers screen: list / search / connect. Layout adapts to terminal size.
 
-pub struct ServersPage {}
+mod input;
+mod list;
+mod render;
+
+use crossterm::event::{KeyEvent, MouseEvent};
+use ratatui::{Frame, layout::Rect};
+use tokio::sync::mpsc::UnboundedSender;
+
+use crate::{Action, Store, ui::Component};
+
+use list::ServerList;
+
+pub struct ServersPage {
+    list: ServerList,
+}
 
 impl ServersPage {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(action_tx: UnboundedSender<Action>) -> Self {
+        let _ = action_tx.send(Action::FetchServers);
+        Self {
+            list: ServerList::new(),
+        }
     }
 }
 
 impl Component for ServersPage {
     fn render(&mut self, frame: &mut Frame, area: Rect, state: &Store) {
-        let block = Block::default().title("Servers").border_style(Style::default().fg(ACCENT));
-        frame.render_widget(block, area);
+        self.list.render(frame, area, state);
     }
 
-    fn handle_input(&mut self, event: KeyEvent) -> Action {
-        Action::None
+    fn handle_input(&mut self, event: KeyEvent, state: &Store) -> Action {
+        self.list.handle_key(event, state)
     }
 
-    fn handle_mouse(&mut self, event: MouseEvent) -> Action {
+    fn handle_mouse(&mut self, _event: MouseEvent, _state: &Store) -> Action {
         Action::None
     }
 
     fn update(&mut self, state: &Store, action: &Action) -> Action {
+        self.list.on_action(state, action);
         Action::None
     }
 }
