@@ -5,28 +5,62 @@ use futures::StreamExt;
 use ratatui::DefaultTerminal;
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 
-use super::{Component, LoginPage, UIEvent};
-use crate::{Action, Store};
+use super::{Component, UIEvent};
+use crate::{
+    Action, Store,
+    ui::{LoginPage, ServersPage},
+};
 
 pub struct UIApp {
     component: Box<dyn Component>,
+    showing_servers: bool,
     action_tx: UnboundedSender<Action>,
     event_tx: UnboundedSender<UIEvent>,
 }
 
 impl UIApp {
-    pub fn new(action_tx: UnboundedSender<Action>, event_tx: UnboundedSender<UIEvent>) -> Self {
+    pub fn new(
+        action_tx: UnboundedSender<Action>,
+        event_tx: UnboundedSender<UIEvent>,
+        state: &Store,
+    ) -> Self {
+        let showing_servers = state.session.is_some();
+        let component: Box<dyn Component> = if showing_servers {
+            Box::new(ServersPage::new())
+        } else {
+            Box::new(LoginPage::new(action_tx.clone(), state.email().to_string()))
+        };
         Self {
-            component: Box::new(LoginPage::new(action_tx.clone())),
+            component,
+            showing_servers,
             action_tx,
             event_tx,
         }
     }
 
+    /// Switch between login and servers when the session appears/disappears.
+    pub fn sync_screen(&mut self, state: &Store) {
+        let want_servers = state.session.is_some();
+        if want_servers == self.showing_servers {
+            return;
+        }
+        self.showing_servers = want_servers;
+        self.component = if want_servers {
+            Box::new(ServersPage::new())
+        } else {
+            Box::new(LoginPage::new(
+                self.action_tx.clone(),
+                state.email().to_string(),
+            ))
+        };
+    }
+
     pub fn render(&mut self, terminal: &mut DefaultTerminal, state: &Store) {
-        terminal.draw(|frame| {
-            self.component.render(frame, frame.area(), state);
-        }).unwrap();
+        terminal
+            .draw(|frame| {
+                self.component.render(frame, frame.area(), state);
+            })
+            .unwrap();
     }
 
     pub fn spawn_event_loop(&mut self, tick_rate: u64) -> JoinHandle<color_eyre::Result<()>> {

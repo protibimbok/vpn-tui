@@ -25,7 +25,7 @@ impl App {
     }
 
     pub async fn run(&mut self, terminal: &mut DefaultTerminal) -> color_eyre::Result<()> {
-        let mut ui_app = UIApp::new(self.action_tx.clone(), self.event_tx.clone());
+        let mut ui_app = UIApp::new(self.action_tx.clone(), self.event_tx.clone(), &self.store);
         let event_loop = ui_app.spawn_event_loop(1000 / 60);
 
         while !self.store.should_quit {
@@ -35,6 +35,7 @@ impl App {
                 }
                 Some(action) = self.action_rx.recv() => {
                     self.store.handle_action(action, &self.action_tx);
+                    ui_app.sync_screen(&self.store);
                 }
             }
             ui_app.render(terminal, &self.store);

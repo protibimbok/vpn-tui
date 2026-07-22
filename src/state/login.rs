@@ -7,6 +7,13 @@ use std::{
 };
 
 use qrcode::{Color, QrCode};
+use tokio::sync::mpsc::UnboundedSender;
+
+use crate::api::SURFSHARK_LOGIN_CODE_URL;
+
+use super::Action;
+
+const CODE_POLL_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct CodeLogin {
     pub code: String,
@@ -17,14 +24,20 @@ pub struct CodeLogin {
 }
 
 impl CodeLogin {
-    pub fn new(code: String, ttl: Duration) -> Self {
-        let qr = str_to_qr_code(&code);
-        Self {
-            code,
-            qr,
-            expires_at: Instant::now() + ttl,
-            cancel: Arc::new(AtomicBool::new(false)),
-        }
+    /// Builds the on-screen challenge and returns a cancel handle the caller
+    /// clones into the background poller.
+    pub fn new(code: String, ttl: Duration) -> (Self, Arc<AtomicBool>) {
+        let qr = str_to_qr_code(&format!("{SURFSHARK_LOGIN_CODE_URL}{code}"));
+        let cancel = Arc::new(AtomicBool::new(false));
+        (
+            Self {
+                code,
+                qr,
+                expires_at: Instant::now() + ttl,
+                cancel: cancel.clone(),
+            },
+            cancel,
+        )
     }
 }
 
@@ -34,9 +47,35 @@ impl Drop for CodeLogin {
     }
 }
 
-/// Returns one string per text row. Each char packs the module above and
-/// below it: `█` both dark, ` ` both light, `▀` top dark, `▄` bottom dark.
-/// A one-module quiet zone is included on every side.
+
+pub fn poll_login_code(tx: &UnboundedSender<Action>, hash: &str, cancel: &AtomicBool) {
+    while !cancel.load(Ordering::Relaxed) {
+        // Sleep in small slices so cancellation is felt promptly.
+        for _ in 0..(CODE_POLL_INTERVAL.as_millis() / 100) {
+            if cancel.load(Ordering::Relaxed) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        match crate::api::poll_login_code(hash) {
+            Ok(crate::api::PollResult::Pending) => {}
+            Ok(crate::api::PollResult::Approved(tokens)) => {
+                let _ = tx.send(Action::LoggedIn {
+                    token: tokens.token,
+                    renew_token: tokens.renew_token,
+                    email: None,
+                });
+                return;
+            }
+            Err(e) => {
+                let _ = tx.send(Action::Error(e.to_string()));
+                return;
+            }
+        }
+    }
+}
+
+
 pub fn str_to_qr_code(data: &str) -> Vec<String> {
     let Ok(code) = QrCode::new(data.as_bytes()) else {
         return Vec::new();

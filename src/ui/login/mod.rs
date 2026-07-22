@@ -18,16 +18,23 @@ enum LoginType {
 pub struct LoginPage {
     login_type: LoginType,
     action_tx: UnboundedSender<Action>,
+    /// Prefills the username field (from saved session email).
+    email: String,
     component: Box<dyn Component>,
 }
 
 impl LoginPage {
-    pub fn new( action_tx: UnboundedSender<Action>) -> Self {
+    pub fn new(action_tx: UnboundedSender<Action>, email: String) -> Self {
         Self {
             login_type: LoginType::UserPass,
             action_tx: action_tx.clone(),
-            component: Box::new(UserPass::new())
+            component: Box::new(UserPass::new(email.clone())),
+            email,
         }
+    }
+
+    fn user_pass(&self) -> Box<dyn Component> {
+        Box::new(UserPass::new(self.email.clone()))
     }
 }
 
@@ -43,15 +50,19 @@ impl Component for LoginPage {
                 LoginType::QrCode => LoginType::UserPass,
             };
             self.component = match self.login_type {
-                LoginType::UserPass => Box::new(UserPass::new()),
+                LoginType::UserPass => self.user_pass(),
                 LoginType::QrCode => Box::new(QrCode::new(self.action_tx.clone())),
             };
-            return Action::Ignore;
+            // Leaving QR cancels the in-flight poller; entering starts SetQrCode.
+            return match self.login_type {
+                LoginType::UserPass => Action::CancelCodeLogin,
+                LoginType::QrCode => Action::Ignore,
+            };
         }
         if event.code == KeyCode::Esc && matches!(self.login_type, LoginType::QrCode) {
             self.login_type = LoginType::UserPass;
-            self.component = Box::new(UserPass::new());
-            return Action::Ignore;
+            self.component = self.user_pass();
+            return Action::CancelCodeLogin;
         }
         let action = self.component.handle_input(event);
         if action != Action::None {

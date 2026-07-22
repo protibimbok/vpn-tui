@@ -118,6 +118,10 @@ impl UserPass {
                 key("Ctrl+U"),
                 hint(" clear field"),
             ]),
+            Line::from(vec![
+                key("Alt+L"),
+                hint(" log in with a code / QR"),
+            ]),
         ])
         .block(
             Block::default()
@@ -136,11 +140,16 @@ impl UserPass {
 }
 
 impl UserPass {
-    pub fn new() -> Self {
+    pub fn new(username: String) -> Self {
+        let focus = if username.is_empty() {
+            Focus::Username
+        } else {
+            Focus::Password
+        };
         Self {
-            username: String::new(),
+            username,
             password: String::new(),
-            focus: Focus::Username,
+            focus,
         }
     }
 }
@@ -183,7 +192,10 @@ impl Component for UserPass {
             }
             KeyCode::Enter => {
                 if !self.username.is_empty() && !self.password.is_empty() {
-                    Action::Login
+                    Action::Login {
+                        username: self.username.clone(),
+                        password: self.password.clone(),
+                    }
                 } else {
                     self.cycle_focus(false);
                     Action::None
