@@ -256,19 +256,19 @@ fn connection_line(state: &Store, width: u16) -> Line<'static> {
             } else {
                 format!("● Connected — {name}")
             };
-            if width >= 90 {
-                if let Some(st) = &state.wg_status {
-                    if !st.endpoint.is_empty() {
-                        text.push_str(&format!(" · {}", st.endpoint));
-                    }
-                    text.push_str(&format!(
-                        " · ↓ {} ↑ {}",
-                        human_bytes(st.rx),
-                        human_bytes(st.tx),
-                    ));
-                    if let Some(handshake) = st.handshake_unix {
-                        text.push_str(&format!(" · handshake {}", handshake_age(handshake)));
-                    }
+            if width >= 90
+                && let Some(st) = &state.wg_status
+            {
+                if !st.endpoint.is_empty() {
+                    text.push_str(&format!(" · {}", st.endpoint));
+                }
+                text.push_str(&format!(
+                    " · ↓ {} ↑ {}",
+                    human_bytes(st.rx),
+                    human_bytes(st.tx),
+                ));
+                if let Some(handshake) = st.handshake_unix {
+                    text.push_str(&format!(" · handshake {}", handshake_age(handshake)));
                 }
             }
             Line::styled(text, Style::new().fg(Color::Green))

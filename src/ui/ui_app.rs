@@ -79,15 +79,13 @@ impl UIApp {
                     }
                     Some(Ok(evt)) = next_evt => {
                         match evt {
-                            Event::Key(key) => {
-                                if event_tx.send(UIEvent::Key(key)).is_err() {
-                                    break;
-                                }
+                            Event::Key(key) if event_tx.send(UIEvent::Key(key)).is_err() => {
+                                break;
                             }
-                            Event::Mouse(mouse) => {
-                                if event_tx.send(UIEvent::Mouse(mouse)).is_err() {
-                                    break;
-                                }
+                            Event::Mouse(mouse)
+                                if event_tx.send(UIEvent::Mouse(mouse)).is_err() =>
+                            {
+                                break;
                             }
                             _ => {}
                         }

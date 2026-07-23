@@ -12,11 +12,11 @@ const STATUS_POLL_INTERVAL: Duration = Duration::from_secs(3);
 
 impl Store {
     pub(super) fn handle_tick(&mut self, action_tx: &UnboundedSender<Action>) {
-        if let Some(code) = &self.code_login {
-            if Instant::now() >= code.expires_at {
-                self.code_login = None;
-                let _ = action_tx.send(Action::SetQrCode);
-            }
+        if let Some(code) = &self.code_login
+            && Instant::now() >= code.expires_at
+        {
+            self.code_login = None;
+            let _ = action_tx.send(Action::SetQrCode);
         }
 
         if self.session.is_some()
