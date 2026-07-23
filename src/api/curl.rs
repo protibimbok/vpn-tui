@@ -5,6 +5,9 @@ use std::process::{Command, Stdio};
 
 const STATUS_MARK: &str = "\n\u{1}__protibimbok_vpn_status__\u{1}";
 
+/// Surfshark labels sessions from the login User-Agent (e.g. `Chrome-linux`).
+const USER_AGENT: &str = concat!("vpn-tui/", env!("CARGO_PKG_VERSION"));
+
 pub struct Response {
     pub status: u16,
     pub body: String,
@@ -30,6 +33,7 @@ fn request(
     cmd.arg("-sS")
         .args(["--connect-timeout", "10", "--max-time", "25"])
         .args(["-X", method])
+        .args(["-A", USER_AGENT])
         .args(["-w", &format!("{STATUS_MARK}%{{http_code}}")]);
     for Header(name, value) in headers {
         cmd.args(["-H", &format!("{name}: {value}")]);
