@@ -1,4 +1,10 @@
 //! HTTP via system `curl` — avoids in-process TLS path-MTU issues behind the VPN.
+//!
+//! `api.surfshark.com` is dual-stack behind Cloudflare. On many paths (especially
+//! with a tunnel up) IPv6 handshakes fail with
+//! `curl: (56) Recv failure: Connection reset by peer` / `(35) Send failure`.
+//! Prefer IPv4, force HTTP/1.1, request compression, and retry transient
+//! transport errors.
 
 use std::io::Write as _;
 use std::process::{Command, Stdio};
@@ -35,7 +41,12 @@ fn request(
 
     let mut cmd = Command::new("curl");
     cmd.arg("-sS")
-        .args(["--connect-timeout", "10", "--max-time", "25"])
+        // Broken/partial IPv6 to Cloudflare is the usual (56)/(35) reset cause.
+        .arg("--ipv4")
+        .arg("--compressed")
+        .arg("--http1.1")
+        .args(["--connect-timeout", "15", "--max-time", "60"])
+        .args(["--retry", "3", "--retry-delay", "1", "--retry-all-errors"])
         .args(["-X", method])
         .args(["-w", &format!("{STATUS_MARK}%{{http_code}}")]);
     if !has_ua {
