@@ -1,0 +1,35 @@
+name: vpn
+arch: "${NFPM_ARCH}"
+platform: linux
+version: "${NFPM_VERSION}"
+section: default
+priority: optional
+maintainer: Saad <sakib.saad.khan@gmail.com>
+description: TUI for managing Surfshark WireGuard connections
+license: MIT
+homepage: https://github.com/protibimbok/vpn-tui
+
+depends:
+  - wireguard-tools
+  - curl
+
+recommends:
+  - iputils-ping
+
+contents:
+  - src: ./dist/vpn
+    dst: /usr/bin/vpn
+    file_info:
+      mode: 04755
+  - src: ./LICENSE
+    dst: /usr/share/licenses/vpn/LICENSE
+    file_info:
+      mode: 0644
+
+overrides:
+  rpm:
+    recommends:
+      - iputils
+  apk:
+    recommends:
+      - iputils

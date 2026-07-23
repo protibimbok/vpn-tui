@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            arch: amd64
+          - target: aarch64-unknown-linux-gnu
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.14.1
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-zigbuild
+        run: cargo install --locked cargo-zigbuild
+
+      - name: Install nfpm
+        run: |
+          curl -fsSL https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_x86_64.tar.gz \
+            | tar -xz --no-same-owner -C /usr/local/bin nfpm
+
+      - name: Build binary
+        run: cargo zigbuild --release --target ${{ matrix.target }}
+
+      - name: Build release artifacts
+        run: |
+          chmod +x scripts/*.sh
+          VERSION="${GITHUB_REF_NAME#v}"
+          ./scripts/build-release-artifacts.sh "${VERSION}" "${{ matrix.target }}" "${{ matrix.arch }}"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: vpn-${{ matrix.arch }}
+          path: release-artifacts/${{ matrix.arch }}/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create checksums
+        run: |
+          cd artifacts
+          sha256sum vpn_* > checksums.txt
+          cat checksums.txt
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  aur:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Publish to AUR
+        env:
+          AUR_KEY: ${{ secrets.AUR_KEY }}
+        run: |
+          if [ -z "${AUR_KEY}" ]; then
+            echo "AUR_KEY not configured; skipping AUR publish"
+            exit 0
+          fi
+          chmod +x scripts/publish-aur.sh
+          ./scripts/publish-aur.sh "${GITHUB_REF_NAME}"
+
+  pkg-dist:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger pkg-dist update
+        env:
+          PKG_DIST_TOKEN: ${{ secrets.PKG_DIST_TOKEN }}
+        run: |
+          if [ -z "${PKG_DIST_TOKEN}" ]; then
+            echo "PKG_DIST_TOKEN not configured; skipping pkg-dist trigger"
+            exit 0
+          fi
+          curl -fsSL -X POST \
+            -H "Authorization: token ${PKG_DIST_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/protibimbok/pkg-dist/dispatches \
+            -d "{\"event_type\":\"release-published\",\"client_payload\":{\"package\":\"vpn\",\"tag\":\"${GITHUB_REF_NAME}\"}}"
