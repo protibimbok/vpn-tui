@@ -1,10 +1,13 @@
 //! WireGuard: config rendering and a thin wrapper around `wg-quick` / `wg`.
-//! Root is obtained when already root, otherwise via passwordless `sudo -n`
-//! (a password prompt would corrupt the TUI). Status queries never use sudo.
+//! Root is obtained per child process: directly when already root, by
+//! re-elevating from the saved uid when the binary is installed setuid-root
+//! (see [`drop_setuid_root`]), or through passwordless sudo as a last resort.
+//! Status queries never use sudo: they read sysfs and our own conf instead.
 
 use std::fs;
-use std::io::Write as _;
+use std::io::{self, Write as _};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::os::unix::process::CommandExt as _;
 use std::path::Path;
 use std::process::Command;
 
@@ -16,24 +19,58 @@ const WG_PORT: u16 = 51820;
 
 pub type Result<T> = std::result::Result<T, String>;
 
+/// Call first thing in `main`, before any threads or files: when installed
+/// setuid-root, drop the effective uid back to the invoking user so the app
+/// itself (config files, network, workers) runs unprivileged. Root stays in
+/// the saved uid, from which [`root_command`] re-elevates individual
+/// `wg`/`wg-quick` children.
+pub fn drop_setuid_root() {
+    let ruid = unsafe { libc::getuid() };
+    if unsafe { libc::geteuid() } == 0 && ruid != 0 {
+        // Saved uid is already 0 from the setuid exec; only euid changes.
+        unsafe { libc::setresuid(!0, ruid, !0) };
+    }
+}
+
+/// Whether the saved uid is root, i.e. we were started setuid-root and
+/// children can re-elevate without sudo.
+pub fn saved_root() -> bool {
+    let (mut ruid, mut euid, mut suid) = (0, 0, 0);
+    unsafe { libc::getresuid(&mut ruid, &mut euid, &mut suid) };
+    suid == 0
+}
+
+/// Builds a command that will run as root: directly when we are root,
+/// re-elevating in the child when setuid-installed, else via `sudo -n`
+/// (-n: never prompt; a password prompt would corrupt the TUI).
 fn root_command(args: &[&str]) -> Command {
-    if geteuid() == 0 {
+    if unsafe { libc::geteuid() } == 0 {
         let mut cmd = Command::new(args[0]);
         cmd.args(&args[1..]);
+        cmd
+    } else if saved_root() {
+        let mut cmd = Command::new(args[0]);
+        cmd.args(&args[1..]);
+        // Don't run root children with the caller's PATH.
+        cmd.env(
+            "PATH",
+            "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        );
+        unsafe {
+            cmd.pre_exec(|| {
+                // Raw syscall: glibc's wrapper isn't async-signal-safe here.
+                if libc::syscall(libc::SYS_setresuid, 0, 0, 0) != 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
         cmd
     } else {
         let mut cmd = Command::new("sudo");
         cmd.arg("-n").args(args);
         cmd
     }
-}
-
-fn geteuid() -> u32 {
-    unsafe extern "C" {
-        fn geteuid() -> u32;
-    }
-    // SAFETY: geteuid has no preconditions and always succeeds.
-    unsafe { geteuid() }
 }
 
 pub fn write_conf(path: &Path, private_key: &str, server: &Server) -> Result<()> {
@@ -82,7 +119,10 @@ pub struct Status {
     pub tx: u64,
 }
 
-/// `None` when the interface is down.
+/// `None` when the interface is down. `wg show` needs CAP_NET_ADMIN, so it
+/// runs only when root comes free (already root, or setuid-installed);
+/// otherwise traffic counters come from sysfs and the endpoint from our own
+/// conf, which covers everything except the handshake time.
 pub fn status(conf: &Path) -> Option<Status> {
     let sys = Path::new("/sys/class/net").join(IFACE);
     if !sys.exists() {
@@ -106,7 +146,9 @@ pub fn status(conf: &Path) -> Option<Status> {
 }
 
 fn wg_dump() -> Option<Status> {
-    if geteuid() != 0 {
+    // No sudo here: this runs every few seconds and a `sudo` per poll would
+    // spam the auth log. Without root available the sysfs fallback covers it.
+    if unsafe { libc::geteuid() } != 0 && !saved_root() {
         return None;
     }
     let out = root_command(&["wg", "show", IFACE, "dump"]).output().ok()?;
@@ -114,6 +156,8 @@ fn wg_dump() -> Option<Status> {
         return None;
     }
     let out = String::from_utf8_lossy(&out.stdout);
+    // Line 0 is the interface, line 1 the single peer:
+    // pubkey  psk  endpoint  allowed-ips  latest-handshake  rx  tx  keepalive
     let fields: Vec<&str> = out.lines().nth(1)?.split('\t').collect();
     if fields.len() < 7 {
         return None;
@@ -146,7 +190,8 @@ fn run(args: &[&str]) -> Result<String> {
         let mut msg = format!("`{}`: {}", args.join(" "), stderr.trim());
         if msg.contains("password is required") {
             msg.push_str(
-                " — run as root or add a passwordless sudo rule for wg-quick",
+                " — run vpn as root, install it setuid (see README), \
+                 or add a passwordless sudo rule for wg-quick",
             );
         }
         return Err(msg);

@@ -100,17 +100,13 @@ fn on_path(bin: &str) -> bool {
 }
 
 fn geteuid() -> u32 {
-    unsafe extern "C" {
-        fn geteuid() -> u32;
-    }
-    // SAFETY: geteuid has no preconditions and always succeeds.
-    unsafe { geteuid() }
+    unsafe { libc::geteuid() }
 }
 
 fn missing_deps() -> Vec<&'static Dep> {
     let mut missing: Vec<&'static Dep> = DEPS.iter().filter(|d| !on_path(d.bin)).collect();
-    // Connect/disconnect needs root or passwordless sudo.
-    if geteuid() != 0 && !on_path(SUDO.bin) {
+    // Connect/disconnect needs root (setuid install / already root) or sudo.
+    if geteuid() != 0 && !crate::utils::wg::saved_root() && !on_path(SUDO.bin) {
         missing.push(&SUDO);
     }
     missing

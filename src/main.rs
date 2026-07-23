@@ -14,6 +14,8 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
+    // Must happen before any threads or file writes.
+    utils::wg::drop_setuid_root();
     utils::ensure_deps()?;
 
     let runtime = tokio::runtime::Runtime::new()?;
