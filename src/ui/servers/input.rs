@@ -84,6 +84,16 @@ impl ServerList {
             }
             KeyCode::Backspace => {
                 self.filter.pop();
+                if self.filter.is_empty() {
+                    if self.pending_filter_closing {
+                        self.pending_filter_closing = false;
+                        self.filtering = false;
+                    } else {
+                        self.pending_filter_closing = true;
+                    }
+                } else {
+                    self.pending_filter_closing = false;
+                }
                 Action::Ignore
             }
             KeyCode::Char('u') if event.modifiers.contains(KeyModifiers::CONTROL) => {

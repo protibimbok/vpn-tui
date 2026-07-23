@@ -51,6 +51,7 @@ impl Density {
 
 pub(super) struct ServerList {
     pub filter: String,
+    pub pending_filter_closing: bool,
     pub filtering: bool,
     pub sort: SortMode,
     pub table_state: TableState,
@@ -93,6 +94,7 @@ impl ServerList {
     pub(super) fn new() -> Self {
         Self {
             filter: String::new(),
+            pending_filter_closing: false,
             filtering: false,
             sort: SortMode::Title,
             table_state: TableState::default().with_selected(Some(0)),
