@@ -29,12 +29,18 @@ fn request(
     headers: &[Header],
     json_body: Option<&str>,
 ) -> Result<Response, String> {
+    let has_ua = headers
+        .iter()
+        .any(|Header(name, _)| name.eq_ignore_ascii_case("User-Agent"));
+
     let mut cmd = Command::new("curl");
     cmd.arg("-sS")
         .args(["--connect-timeout", "10", "--max-time", "25"])
         .args(["-X", method])
-        .args(["-A", USER_AGENT])
         .args(["-w", &format!("{STATUS_MARK}%{{http_code}}")]);
+    if !has_ua {
+        cmd.args(["-A", USER_AGENT]);
+    }
     for Header(name, value) in headers {
         cmd.args(["-H", &format!("{name}: {value}")]);
     }
