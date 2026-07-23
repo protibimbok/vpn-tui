@@ -69,11 +69,18 @@ vpn
 
 ## Requirements
 
-- Linux with `wireguard-tools` (`wg`, `wg-quick`), `ping`, and `curl`
-- Packages and the install script set the setuid bit automatically.
-  Building from source requires the manual `install -m 4755` step above.
-  Alternatives: a passwordless sudo rule for `wg-quick` (no handshake age in
-  the status bar), or running as root.
+Runtime tools (the TUI shells out to these):
+
+| Tool | Package (typical) | Used for |
+|------|-------------------|----------|
+| `wg`, `wg-quick` | `wireguard-tools` | Bring the tunnel up/down and query status |
+| `curl` | `curl` | Provider API calls |
+| `ping` | `iputils` / `iputils-ping` | Server latency checks |
+| `resolvconf` | see below | Apply the config `DNS =` lines via `wg-quick` |
+
+**DNS / `resolvconf`:** `wg-quick` always calls `resolvconf` when a config has `DNS =`. On systems that use **systemd-resolved**, install `systemd-resolvconf` (Arch: `pacman -S systemd-resolvconf`) so `/usr/bin/resolvconf` is the `resolvectl` shim. Do **not** use `openresolv` against a systemd-managed `/etc/resolv.conf` — that produces `resolvconf: signature mismatch` and tears the interface down.
+
+**Privileges:** Packages and the install script set the setuid bit automatically. Building from source requires the manual `install -m 4755` step above. Alternatives: a passwordless sudo rule for `wg-quick` (no handshake age in the status bar), or running as root.
 
 ## Release setup (for maintainers)
 
