@@ -53,8 +53,10 @@ license=('MIT')
 depends=('wireguard-tools' 'curl' 'iputils')
 provides=('vpn')
 conflicts=('vpn')
-source_x86_64=("https://github.com/${REPO}/releases/download/v\${pkgver}/vpn_linux_amd64.tar.gz")
-source_aarch64=("https://github.com/${REPO}/releases/download/v\${pkgver}/vpn_linux_arm64.tar.gz")
+# Versioned local filenames so makepkg/yay do not reuse a previous release's
+# tarball from cache (remote assets are unversioned: vpn_linux_*.tar.gz).
+source_x86_64=("vpn_linux_amd64-\${pkgver}.tar.gz::https://github.com/${REPO}/releases/download/v\${pkgver}/vpn_linux_amd64.tar.gz")
+source_aarch64=("vpn_linux_arm64-\${pkgver}.tar.gz::https://github.com/${REPO}/releases/download/v\${pkgver}/vpn_linux_arm64.tar.gz")
 sha256sums_x86_64=('${SHA_AMD64}')
 sha256sums_aarch64=('${SHA_ARM64}')
 
@@ -81,9 +83,9 @@ pkgbase = vpn-bin
 	depends = iputils
 	provides = vpn
 	conflicts = vpn
-	source_x86_64 = https://github.com/${REPO}/releases/download/v${VERSION}/vpn_linux_amd64.tar.gz
+	source_x86_64 = vpn_linux_amd64-${VERSION}.tar.gz::https://github.com/${REPO}/releases/download/v${VERSION}/vpn_linux_amd64.tar.gz
 	sha256sums_x86_64 = ${SHA_AMD64}
-	source_aarch64 = https://github.com/${REPO}/releases/download/v${VERSION}/vpn_linux_arm64.tar.gz
+	source_aarch64 = vpn_linux_arm64-${VERSION}.tar.gz::https://github.com/${REPO}/releases/download/v${VERSION}/vpn_linux_arm64.tar.gz
 	sha256sums_aarch64 = ${SHA_ARM64}
 
 pkgname = vpn-bin
