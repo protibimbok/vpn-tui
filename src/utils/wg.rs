@@ -11,10 +11,11 @@ use std::os::unix::process::CommandExt as _;
 use std::path::Path;
 use std::process::Command;
 
-use crate::api::Server;
+use crate::api::{Provider, Server};
 
 pub const IFACE: &str = "vpn";
 const SURFSHARK_DNS: &str = "162.252.172.57, 149.154.159.92";
+const PROTON_DNS: &str = "10.2.0.1";
 const WG_PORT: u16 = 51820;
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -73,12 +74,22 @@ fn root_command(args: &[&str]) -> Command {
     }
 }
 
-pub fn write_conf(path: &Path, private_key: &str, server: &Server) -> Result<()> {
+pub fn write_conf(
+    path: &Path,
+    provider: Provider,
+    private_key: &str,
+    server: &Server,
+) -> Result<()> {
+    // Surfshark hands out a /16 and its own DNS; Proton uses a /32 and 10.2.0.1.
+    let (dns, address) = match provider {
+        Provider::Surfshark => (SURFSHARK_DNS, "10.14.0.2/16"),
+        Provider::Proton => (PROTON_DNS, "10.2.0.2/32"),
+    };
     let conf = format!(
         "[Interface]\n\
          PrivateKey = {private_key}\n\
-         Address = 10.14.0.2/16\n\
-         DNS = {SURFSHARK_DNS}\n\
+         Address = {address}\n\
+         DNS = {dns}\n\
          \n\
          [Peer]\n\
          PublicKey = {}\n\
@@ -171,13 +182,19 @@ fn wg_dump() -> Option<Status> {
 }
 
 fn conf_endpoint(conf: &Path) -> String {
-    fs::read_to_string(conf)
-        .ok()
-        .and_then(|text| {
-            text.lines()
-                .find_map(|l| l.strip_prefix("Endpoint = ").map(|e| e.trim().to_string()))
-        })
-        .unwrap_or_default()
+    conf_field(conf, "Endpoint = ").unwrap_or_default()
+}
+
+/// Peer `PublicKey` from our written conf — unique even when Proton EntryIPs are shared.
+pub fn conf_peer_public_key(conf: &Path) -> Option<String> {
+    conf_field(conf, "PublicKey = ")
+}
+
+fn conf_field(conf: &Path, prefix: &str) -> Option<String> {
+    fs::read_to_string(conf).ok().and_then(|text| {
+        text.lines()
+            .find_map(|l| l.strip_prefix(prefix).map(|v| v.trim().to_string()))
+    })
 }
 
 fn run(args: &[&str]) -> Result<String> {

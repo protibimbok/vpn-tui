@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::api::ApiError;
+use crate::api::{ApiError, Server};
 use crate::utils::{self, conf_path, ping_ms};
 
 use super::{Action, Store};
@@ -16,7 +16,27 @@ impl Store {
                 if self.busy.is_some() || self.session.is_none() {
                     return;
                 }
-                let pub_key = self.ensure_public_key();
+                // Ensure keys exist and are reflected in the session before bootstrap.
+                match self.storage.provider {
+                    crate::api::Provider::Surfshark => {
+                        let pub_key = self.ensure_surfshark_keys();
+                        if let Some(crate::api::Session::Surfshark {
+                            pub_key: ref mut pk,
+                            ..
+                        }) = self.session
+                        {
+                            *pk = pub_key;
+                        }
+                    }
+                    crate::api::Provider::Proton => {
+                        let keys = self.ensure_proton_keys();
+                        if let Some(crate::api::Session::Proton(ref mut p)) = self.session {
+                            // Rebuild so the session holds the persisted seed.
+                            let tokens = p.tokens().clone();
+                            *p = crate::api::proton::ProtonSession::new(tokens, keys);
+                        }
+                    }
+                }
                 let mut session = self.session.clone().unwrap();
                 self.busy = Some(if self.servers.is_empty() {
                     "Loading servers…".into()
@@ -26,11 +46,13 @@ impl Store {
                 self.error = None;
                 let tx = action_tx.clone();
                 tokio::task::spawn_blocking(move || {
-                    let _ = match session.bootstrap(&pub_key) {
+                    let _ = match session.bootstrap() {
                         Ok(servers) => {
+                            let snap = session.snapshot();
                             let _ = tx.send(Action::SessionUpdated {
-                                token: session.token,
-                                renew_token: session.renew_token,
+                                token: snap.token,
+                                renew_token: snap.renew_token,
+                                uid: snap.uid,
                             });
                             tx.send(Action::ServersLoaded(servers))
                         }
@@ -45,6 +67,7 @@ impl Store {
                 self.storage.set_servers_cache(&servers);
                 self.save_storage();
                 self.servers = servers;
+                self.servers_epoch = self.servers_epoch.wrapping_add(1);
                 self.busy = None;
                 self.status_msg = Some(format!("{n} servers loaded"));
             }
@@ -94,24 +117,26 @@ impl Store {
                 if self.busy.is_some() {
                     return;
                 }
-                let Some(private_key) = self.storage.private_key.clone() else {
+                let Some(private_key) = self.wg_private_key() else {
                     self.error = Some("no WireGuard key yet — refresh servers first".into());
                     return;
                 };
-                let name = server.display_name();
+                let provider = self.storage.provider;
+                let label = server.connected_label();
+                let id = server.name.clone();
                 let was_connected = self.connected.is_some();
                 let conf = conf_path();
-                self.busy = Some(format!("Connecting to {name}…"));
+                self.busy = Some(format!("Connecting to {label}…"));
                 self.error = None;
                 let tx = action_tx.clone();
                 tokio::task::spawn_blocking(move || {
                     if was_connected {
                         let _ = utils::wg::down(&conf);
                     }
-                    let result = utils::wg::write_conf(&conf, &private_key, &server)
+                    let result = utils::wg::write_conf(&conf, provider, &private_key, &server)
                         .and_then(|_| utils::wg::up(&conf));
                     let _ = match result {
-                        Ok(()) => tx.send(Action::Connected(name)),
+                        Ok(()) => tx.send(Action::Connected(id)),
                         Err(e) => tx.send(Action::Error(format!("connect: {e}"))),
                     };
                 });
@@ -135,18 +160,24 @@ impl Store {
                     };
                 });
             }
-            Action::Connected(name) => {
-                self.connected = Some(name.clone());
-                self.storage.connected = Some(name.clone());
+            Action::Connected(id) => {
+                self.connected = Some(id.clone());
+                self.storage.data.connected = Some(id.clone());
                 self.save_storage();
                 self.busy = None;
                 self.wg_status = utils::wg::status(&conf_path());
-                self.status_msg = Some(format!("connected to {name}"));
+                let label = self
+                    .servers
+                    .iter()
+                    .find(|s| s.name == id)
+                    .map(Server::connected_label)
+                    .unwrap_or(id);
+                self.status_msg = Some(format!("connected to {label}"));
             }
             Action::Disconnected => {
                 self.connected = None;
                 self.wg_status = None;
-                self.storage.connected = None;
+                self.storage.data.connected = None;
                 self.save_storage();
                 self.busy = None;
                 self.status_msg = Some("disconnected".into());

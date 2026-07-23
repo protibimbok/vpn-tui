@@ -1,7 +1,10 @@
 # vpn
 
-A terminal UI for managing Surfshark WireGuard connections, built with
-[ratatui](https://ratatui.rs).
+A terminal UI for managing Surfshark and ProtonVPN WireGuard connections, built
+with [ratatui](https://ratatui.rs).
+
+Press **Alt+Space** to switch providers. Each provider keeps its own session in
+`~/.config/vpn/` (`surfshark.json`, `proton.json`, `prefs.json`).
 
 ## Installation
 

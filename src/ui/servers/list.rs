@@ -54,7 +54,39 @@ pub(super) struct ServerList {
     pub filtering: bool,
     pub sort: SortMode,
     pub table_state: TableState,
+    /// Indices into `Store::servers` after filter/sort.
     pub visible: Vec<usize>,
+    /// First visible index into `visible` (scroll window start).
+    pub scroll: usize,
+    /// Avoid rebuilding/sorting the index list every 60 Hz frame.
+    recompute_key: RecomputeKey,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct RecomputeKey {
+    servers_epoch: u64,
+    latency_count: usize,
+    sort: SortMode,
+    filter_len: usize,
+    /// Cheap fingerprint of the filter string.
+    filter_hash: u64,
+}
+
+impl RecomputeKey {
+    fn from(list: &ServerList, state: &Store) -> Self {
+        Self {
+            servers_epoch: state.servers_epoch,
+            latency_count: state.latencies.len(),
+            sort: list.sort,
+            filter_len: list.filter.len(),
+            filter_hash: {
+                use std::hash::{Hash, Hasher};
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                list.filter.hash(&mut h);
+                h.finish()
+            },
+        }
+    }
 }
 
 impl ServerList {
@@ -65,10 +97,30 @@ impl ServerList {
             sort: SortMode::Title,
             table_state: TableState::default().with_selected(Some(0)),
             visible: Vec::new(),
+            scroll: 0,
+            recompute_key: RecomputeKey {
+                servers_epoch: u64::MAX, // force first recompute
+                latency_count: 0,
+                sort: SortMode::Title,
+                filter_len: 0,
+                filter_hash: 0,
+            },
         }
     }
 
     pub(super) fn recompute(&mut self, state: &Store) {
+        let key = RecomputeKey::from(self, state);
+        if key == self.recompute_key {
+            if let Some(row) = self.table_state.selected() {
+                if !self.visible.is_empty() {
+                    self.table_state
+                        .select(Some(row.min(self.visible.len() - 1)));
+                }
+            }
+            return;
+        }
+        self.recompute_key = key;
+
         let needle = self.filter.to_lowercase();
         let terms: Vec<&str> = needle.split_whitespace().collect();
         self.visible = state
@@ -77,8 +129,7 @@ impl ServerList {
             .enumerate()
             .filter(|(_, s)| {
                 terms.is_empty() || {
-                    let haystack =
-                        format!("{} {} {}", s.country, s.location, s.name).to_lowercase();
+                    let haystack = s.connected_label().to_lowercase();
                     terms.iter().all(|t| haystack.contains(t))
                 }
             })
@@ -87,10 +138,25 @@ impl ServerList {
 
         let servers = &state.servers;
         let latencies = &state.latencies;
+        // 0 = country matches all terms, 1 = any term, 2 = only location/id.
+        let country_rank = |i: usize| -> u8 {
+            if terms.is_empty() {
+                return 0;
+            }
+            let country = servers[i].country.to_lowercase();
+            if terms.iter().all(|t| country.contains(t)) {
+                0
+            } else if terms.iter().any(|t| country.contains(t)) {
+                1
+            } else {
+                2
+            }
+        };
         match self.sort {
             SortMode::Title => self.visible.sort_by(|&a, &b| {
                 let key = |i: usize| {
                     (
+                        country_rank(i),
                         servers[i].country.as_str(),
                         servers[i].location.as_str(),
                         servers[i].name.as_str(),
@@ -99,7 +165,7 @@ impl ServerList {
                 key(a).cmp(&key(b))
             }),
             SortMode::Load => self.visible.sort_by(|&a, &b| {
-                let key = |i: usize| (servers[i].load, servers[i].country.as_str());
+                let key = |i: usize| (country_rank(i), servers[i].load, servers[i].country.as_str());
                 key(a).cmp(&key(b))
             }),
             SortMode::Latency => self.visible.sort_by(|&a, &b| {
@@ -109,7 +175,7 @@ impl ServerList {
                         .copied()
                         .flatten()
                         .unwrap_or(u32::MAX);
-                    (ms, servers[i].load)
+                    (country_rank(i), ms, servers[i].load)
                 };
                 key(a).cmp(&key(b))
             }),
@@ -117,11 +183,29 @@ impl ServerList {
 
         if self.visible.is_empty() {
             self.table_state.select(None);
+            self.scroll = 0;
         } else {
             let row = self.table_state.selected().unwrap_or(0);
             self.table_state
                 .select(Some(row.min(self.visible.len() - 1)));
+            self.scroll = self.scroll.min(self.visible.len().saturating_sub(1));
         }
+    }
+
+    /// Keep `scroll` such that the selected row stays inside a window of `page_size`.
+    pub(super) fn sync_scroll(&mut self, page_size: usize) {
+        let page_size = page_size.max(1);
+        let Some(selected) = self.table_state.selected() else {
+            self.scroll = 0;
+            return;
+        };
+        if selected < self.scroll {
+            self.scroll = selected;
+        } else if selected >= self.scroll.saturating_add(page_size) {
+            self.scroll = selected + 1 - page_size;
+        }
+        let max_scroll = self.visible.len().saturating_sub(page_size);
+        self.scroll = self.scroll.min(max_scroll);
     }
 
     pub(super) fn selected<'a>(&self, state: &'a Store) -> Option<&'a Server> {
@@ -142,12 +226,14 @@ impl ServerList {
     pub(super) fn select_first(&mut self) {
         if !self.visible.is_empty() {
             self.table_state.select(Some(0));
+            self.scroll = 0;
         }
     }
 
     pub(super) fn select_last(&mut self) {
         if !self.visible.is_empty() {
-            self.table_state.select(Some(self.visible.len() - 1));
+            let last = self.visible.len() - 1;
+            self.table_state.select(Some(last));
         }
     }
 
@@ -173,8 +259,20 @@ impl ServerList {
     }
 
     pub(super) fn is_connected(state: &Store, s: &Server) -> bool {
-        state.connected.as_ref().is_some_and(|c| {
-            c == &s.display_name() || c == &s.name || c.contains(&s.endpoint_host)
-        })
+        let Some(c) = state.connected.as_ref() else {
+            return false;
+        };
+        // Unique logical id: Proton `NL#54`, Surfshark connection hostname.
+        if c == &s.name || c == &s.connected_label() {
+            return true;
+        }
+        // Peer pubkey uniquely identifies the physical tunnel (Proton EntryIPs
+        // are shared across many logicals; city/country alone is not unique).
+        if let Some(pk) = crate::utils::wg::conf_peer_public_key(&crate::utils::conf_path()) {
+            return pk == s.wg_public_key;
+        }
+        // Legacy label / endpoint-only restore when conf isn't readable.
+        c == &s.display_name() || c.contains(&s.endpoint_host)
     }
 }
+

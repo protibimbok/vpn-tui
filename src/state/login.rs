@@ -63,6 +63,7 @@ pub fn poll_login_code(tx: &UnboundedSender<Action>, hash: &str, cancel: &Atomic
                 let _ = tx.send(Action::LoggedIn {
                     token: tokens.token,
                     renew_token: tokens.renew_token,
+                    uid: None,
                     email: None,
                 });
                 return;

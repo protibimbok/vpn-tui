@@ -5,7 +5,7 @@ version: "${NFPM_VERSION}"
 section: default
 priority: optional
 maintainer: Saad <sakib.saad.khan@gmail.com>
-description: TUI for managing Surfshark WireGuard connections
+description: TUI for managing Surfshark and ProtonVPN WireGuard connections
 license: MIT
 homepage: https://github.com/protibimbok/vpn-tui
 

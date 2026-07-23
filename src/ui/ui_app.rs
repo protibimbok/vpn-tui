@@ -26,7 +26,10 @@ impl UIApp {
     ) -> Self {
         let showing_servers = state.session.is_some();
         let component: Box<dyn Component> = if showing_servers {
-            Box::new(ServersPage::new(action_tx.clone()))
+            Box::new(ServersPage::new(
+                action_tx.clone(),
+                state.servers.is_empty(),
+            ))
         } else {
             Box::new(LoginPage::new(action_tx.clone(), state.email().to_string()))
         };
@@ -46,7 +49,10 @@ impl UIApp {
         }
         self.showing_servers = want_servers;
         self.component = if want_servers {
-            Box::new(ServersPage::new(self.action_tx.clone()))
+            Box::new(ServersPage::new(
+                self.action_tx.clone(),
+                state.servers.is_empty(),
+            ))
         } else {
             Box::new(LoginPage::new(
                 self.action_tx.clone(),
@@ -101,6 +107,11 @@ impl UIApp {
             UIEvent::Key(key) => {
                 if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
                     self.action_tx.send(Action::Quit).unwrap();
+                    return;
+                }
+                // Global: Alt+Space switches provider (login or servers).
+                if key.code == KeyCode::Char(' ') && key.modifiers.contains(KeyModifiers::ALT) {
+                    self.action_tx.send(Action::SwitchProvider).unwrap();
                     return;
                 }
                 let action = self.component.handle_input(key, state);

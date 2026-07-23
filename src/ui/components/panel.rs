@@ -16,8 +16,9 @@ pub fn fill_screen_bg(frame: &mut Frame, area: Rect) {
     );
 }
 
-/// Rounded accent card with a `VPN · {subtitle}` title and Surfshark footer.
-pub fn branded_panel(subtitle: &str) -> Block<'static> {
+/// Rounded accent card with a `VPN · {subtitle}` title and provider footer.
+pub fn branded_panel(subtitle: &str, provider: &str) -> Block<'static> {
+    let provider = provider.to_string();
     Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -30,7 +31,7 @@ pub fn branded_panel(subtitle: &str) -> Block<'static> {
         .title_bottom(
             Line::from(vec![
                 Span::raw(" "),
-                Span::styled("Surfshark", Style::default().fg(MUTED)),
+                Span::styled(provider, Style::default().fg(MUTED)),
                 Span::raw(" "),
             ])
             .centered(),

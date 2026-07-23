@@ -1,13 +1,18 @@
-//! Surfshark REST API client.
+//! Surfshark REST API client and shared VPN types.
 
 mod auth;
 mod curl;
 mod error;
+mod live;
+pub mod proton;
+mod provider;
 mod servers;
 pub mod session;
 
 pub use auth::{create_login_code, login, poll_login_code, PollResult};
 pub use error::ApiError;
+pub use live::Session;
+pub use provider::Provider;
 pub use servers::Server;
 pub use session::AuthSession;
 

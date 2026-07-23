@@ -1,4 +1,5 @@
 use crate::api::Server;
+use crate::api::proton::ProtonTokens;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
@@ -6,6 +7,17 @@ pub enum Action {
         username: String,
         password: String,
     },
+    /// Submit a Proton TOTP code for a pending two-factor login.
+    Submit2fa {
+        code: String,
+    },
+    Cancel2fa,
+    TwoFactorRequired {
+        tokens: ProtonTokens,
+        email: Option<String>,
+    },
+    /// Cycle Surfshark ⇄ Proton and load that provider's saved session.
+    SwitchProvider,
     Quit,
     Tick,
     SetQrCode,
@@ -18,11 +30,13 @@ pub enum Action {
     LoggedIn {
         token: String,
         renew_token: Option<String>,
+        uid: Option<String>,
         email: Option<String>,
     },
     SessionUpdated {
         token: String,
         renew_token: Option<String>,
+        uid: Option<String>,
     },
     AuthExpired(String),
     RenewFinished,

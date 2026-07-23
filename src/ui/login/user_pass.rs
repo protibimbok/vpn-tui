@@ -9,6 +9,7 @@ use ratatui::{
 
 use crate::{
     Store,
+    api::Provider,
     state::Action,
     ui::{
         Component, branded_panel, fill_screen_bg, hint, key, render_input,
@@ -44,12 +45,14 @@ impl UserPass {
     }
 
     fn render_form(&self, frame: &mut Frame, area: Rect, state: &Store) {
-        let block = branded_panel("Sign in");
+        let block = branded_panel("Sign in", state.provider().label());
         let inner = block.inner(area);
         frame.render_widget(Clear, area);
         frame.render_widget(block, area);
 
-        let [title, _, user_input, _, pass_input, _, status] = Layout::vertical([
+        let [provider_line, _, title, _, user_input, _, pass_input, _, status] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Length(3),
@@ -59,6 +62,21 @@ impl UserPass {
             Constraint::Min(1),
         ])
         .areas(inner);
+
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled("‹ ", Style::default().fg(MUTED)),
+                Span::styled(
+                    state.provider().label(),
+                    Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(" ›", Style::default().fg(MUTED)),
+                Span::styled("  Alt+Space", Style::default().fg(ACCENT)),
+                Span::styled(" switch", Style::default().fg(MUTED)),
+            ]))
+            .centered(),
+            provider_line,
+        );
 
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(
@@ -73,7 +91,7 @@ impl UserPass {
             frame,
             user_input,
             &self.username,
-            "Username",
+            "Email",
             self.focus == Focus::Username,
             false,
         );
@@ -103,8 +121,8 @@ impl UserPass {
         frame.render_widget(Paragraph::new(status_line).centered(), status);
     }
 
-    fn render_help(&self, frame: &mut Frame, area: Rect) {
-        let help = Paragraph::new(vec![
+    fn render_help(&self, frame: &mut Frame, area: Rect, provider: Provider) {
+        let mut lines = vec![
             Line::from(vec![
                 key("Tab"),
                 Span::styled(" / ", Style::default().fg(MUTED)),
@@ -112,18 +130,28 @@ impl UserPass {
                 hint(" switch field"),
             ]),
             Line::from(vec![
+                key("Alt+Space"),
+                hint(" switch provider"),
+                Span::styled("  ·  ", Style::default().fg(MUTED)),
                 key("Esc"),
                 hint(" quit"),
-                Span::styled("  ·  ", Style::default().fg(MUTED)),
-                key("Ctrl+U"),
-                hint(" clear field"),
             ]),
-            Line::from(vec![
-                key("Alt+L"),
-                hint(" log in with a code / QR"),
-            ]),
-        ])
-        .block(
+        ];
+        match provider {
+            Provider::Surfshark => {
+                lines.push(Line::from(vec![
+                    key("Alt+L"),
+                    hint(" log in with a code / QR"),
+                ]));
+            }
+            Provider::Proton => {
+                lines.push(Line::from(vec![
+                    hint("2FA prompted automatically when enabled"),
+                ]));
+            }
+        }
+
+        let help = Paragraph::new(lines).block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
@@ -158,7 +186,9 @@ impl Component for UserPass {
     fn render(&mut self, frame: &mut Frame, area: Rect, state: &Store) {
         fill_screen_bg(frame, area);
 
-        let content_height = FORM_HEIGHT + 1 + HELP_HEIGHT;
+        // Extra row for the provider switcher line.
+        let form_height = FORM_HEIGHT + 2;
+        let content_height = form_height + 1 + HELP_HEIGHT;
         let [content] = Layout::vertical([Constraint::Length(content_height)])
             .flex(Flex::Center)
             .areas(area);
@@ -169,14 +199,14 @@ impl Component for UserPass {
             .areas(content);
 
         let [form_area, _, help_area] = Layout::vertical([
-            Constraint::Length(FORM_HEIGHT),
+            Constraint::Length(form_height),
             Constraint::Length(1),
             Constraint::Length(HELP_HEIGHT),
         ])
         .areas(column);
 
         self.render_form(frame, form_area, state);
-        self.render_help(frame, help_area);
+        self.render_help(frame, help_area, state.provider());
     }
 
     fn handle_input(&mut self, event: KeyEvent, _state: &Store) -> Action {

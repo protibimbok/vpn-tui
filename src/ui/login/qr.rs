@@ -53,7 +53,7 @@ impl QrCode {
             .flex(Flex::Center)
             .areas(card_area);
 
-        let block = branded_panel("Log in with a code");
+        let block = branded_panel("Log in with a code", state.provider().label());
         let body = block.inner(card_area);
         frame.render_widget(Clear, card_area);
         frame.render_widget(block, card_area);

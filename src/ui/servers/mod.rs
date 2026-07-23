@@ -17,8 +17,13 @@ pub struct ServersPage {
 }
 
 impl ServersPage {
-    pub fn new(action_tx: UnboundedSender<Action>) -> Self {
-        let _ = action_tx.send(Action::FetchServers);
+    /// Open the servers screen. Fetches from the network only when the
+    /// in-memory list is empty (no usable disk cache); otherwise the cache
+    /// is shown immediately. Press `r` to force a refresh.
+    pub fn new(action_tx: UnboundedSender<Action>, servers_empty: bool) -> Self {
+        if servers_empty {
+            let _ = action_tx.send(Action::FetchServers);
+        }
         Self {
             list: ServerList::new(),
         }

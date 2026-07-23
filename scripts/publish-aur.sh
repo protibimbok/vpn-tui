@@ -46,7 +46,7 @@ cat > PKGBUILD <<EOF
 pkgname=vpn-bin
 pkgver=${VERSION}
 pkgrel=1
-pkgdesc="TUI for managing Surfshark WireGuard connections"
+pkgdesc="TUI for managing Surfshark and ProtonVPN WireGuard connections"
 arch=('x86_64' 'aarch64')
 url="https://github.com/${REPO}"
 license=('MIT')
@@ -69,7 +69,7 @@ EOF
 #   key "pkgver" can not occur after pkgname
 cat > .SRCINFO <<EOF
 pkgbase = vpn-bin
-	pkgdesc = TUI for managing Surfshark WireGuard connections
+	pkgdesc = TUI for managing Surfshark and ProtonVPN WireGuard connections
 	pkgver = ${VERSION}
 	pkgrel = 1
 	url = https://github.com/${REPO}

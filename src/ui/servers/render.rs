@@ -7,7 +7,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Table},
+    widgets::{Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
 };
 
 use crate::{
@@ -60,9 +60,26 @@ impl ServerList {
 
     fn render_table(&mut self, frame: &mut Frame, area: Rect, state: &Store) {
         let density = Density::from_width(area.width);
+
+        // Borders (2) + header (1) = rows that fit in the body.
+        let page_size = area.height.saturating_sub(3).max(1) as usize;
+        self.sync_scroll(page_size);
+
+        let total = self.visible.len();
+        let end = (self.scroll + page_size).min(total);
+        let window = if self.scroll < end {
+            &self.visible[self.scroll..end]
+        } else {
+            &[][..]
+        };
+
+        let range = if total == 0 {
+            String::new()
+        } else {
+            format!(" · {}–{}", self.scroll + 1, end)
+        };
         let title = format!(
-            " Servers ({}) · sort: {}{} ",
-            self.visible.len(),
+            " Servers ({total}){range} · sort: {}{} ",
             self.sort.label(),
             if self.filter.is_empty() {
                 String::new()
@@ -75,7 +92,8 @@ impl ServerList {
         let header = Row::new(headers.into_iter().map(Cell::from).collect::<Vec<_>>())
             .style(Style::new().add_modifier(Modifier::BOLD).fg(ACCENT));
 
-        let rows = self.visible.iter().map(|&i| {
+        // Only materialize rows in the scroll window — Proton lists can be thousands.
+        let rows = window.iter().map(|&i| {
             let s = &state.servers[i];
             Row::new(row_cells(density, state, s))
         });
@@ -92,7 +110,13 @@ impl ServerList {
             .row_highlight_style(Style::new().bg(ACCENT).fg(Color::Black))
             .highlight_symbol("▶ ");
 
-        frame.render_stateful_widget(table, area, &mut self.table_state);
+        // Selection is absolute in `table_state`; map to the window-local index.
+        let local = self
+            .table_state
+            .selected()
+            .map(|sel| sel.saturating_sub(self.scroll));
+        let mut window_state = TableState::default().with_selected(local);
+        frame.render_stateful_widget(table, area, &mut window_state);
     }
 
     fn help_lines(&self, width: u16) -> Vec<Line<'static>> {
@@ -119,6 +143,7 @@ const HELP_ITEMS: &[(&str, &str)] = &[
     ("/", " search"),
     ("r", " refresh"),
     ("L", " logout"),
+    ("Alt+Space", " provider"),
     ("q", " quit"),
 ];
 
@@ -174,11 +199,9 @@ fn columns(density: Density) -> (Vec<&'static str>, Vec<Constraint>) {
             ],
         ),
         Density::Wide => (
-            vec!["Country", "Location", "Server", "Load", "Ping", "Connected"],
+            vec!["Title", "Load", "Ping", "Connected"],
             vec![
-                Constraint::Length(16),
-                Constraint::Length(16),
-                Constraint::Min(20),
+                Constraint::Min(28),
                 Constraint::Length(6),
                 Constraint::Length(8),
                 Constraint::Length(10),
@@ -203,7 +226,7 @@ fn row_cells(density: Density, state: &Store, s: &Server) -> Vec<Cell<'static>> 
 
     match density {
         Density::Compact => vec![
-            Cell::from(s.display_name()),
+            Cell::from(s.connected_label()),
             Cell::from(ping),
             load,
             if is_conn {
@@ -213,15 +236,13 @@ fn row_cells(density: Density, state: &Store, s: &Server) -> Vec<Cell<'static>> 
             },
         ],
         Density::Comfortable => vec![
-            Cell::from(s.display_name()),
+            Cell::from(s.connected_label()),
             load,
             Cell::from(ping),
             conn_cell,
         ],
         Density::Wide => vec![
-            Cell::from(s.country.clone()),
-            Cell::from(s.location.clone()),
-            Cell::from(s.name.clone()),
+            Cell::from(s.connected_label()),
             load,
             Cell::from(ping),
             conn_cell,
@@ -237,7 +258,7 @@ fn render_status(frame: &mut Frame, area: Rect, state: &Store) {
         .title(Line::from(vec![
             Span::raw(" "),
             Span::styled("VPN", Style::default().fg(ACCENT).bold()),
-            Span::raw(" · Servers "),
+            Span::raw(format!(" · {} ", state.provider().label())),
         ]));
     let inner = block.inner(area);
     frame.render_widget(Clear, area);
@@ -250,7 +271,13 @@ fn render_status(frame: &mut Frame, area: Rect, state: &Store) {
 
 fn connection_line(state: &Store, width: u16) -> Line<'static> {
     match &state.connected {
-        Some(name) => {
+        Some(stored) => {
+            let name = state
+                .servers
+                .iter()
+                .find(|s| ServerList::is_connected(state, s))
+                .map(Server::connected_label)
+                .unwrap_or_else(|| stored.clone());
             let mut text = if width < 60 {
                 format!("● {name}")
             } else {
