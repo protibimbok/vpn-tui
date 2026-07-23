@@ -111,11 +111,11 @@ impl ServerList {
     pub(super) fn recompute(&mut self, state: &Store) {
         let key = RecomputeKey::from(self, state);
         if key == self.recompute_key {
-            if let Some(row) = self.table_state.selected() {
-                if !self.visible.is_empty() {
-                    self.table_state
-                        .select(Some(row.min(self.visible.len() - 1)));
-                }
+            if let Some(row) = self.table_state.selected()
+                && !self.visible.is_empty()
+            {
+                self.table_state
+                    .select(Some(row.min(self.visible.len() - 1)));
             }
             return;
         }

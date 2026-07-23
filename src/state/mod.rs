@@ -278,17 +278,17 @@ impl Store {
             self.servers_epoch = self.servers_epoch.wrapping_add(1);
         }
         // Keep showing the live tunnel regardless of which provider owns it.
-        if self.connected.is_none() {
-            if let Some(status) = utils::wg::status(&conf_path()) {
-                self.connected = Some(
-                    self.storage
-                        .data
-                        .connected
-                        .clone()
-                        .unwrap_or_else(|| status.endpoint.clone()),
-                );
-                self.wg_status = Some(status);
-            }
+        if self.connected.is_none()
+            && let Some(status) = utils::wg::status(&conf_path())
+        {
+            self.connected = Some(
+                self.storage
+                    .data
+                    .connected
+                    .clone()
+                    .unwrap_or_else(|| status.endpoint.clone()),
+            );
+            self.wg_status = Some(status);
         }
     }
 
