@@ -34,8 +34,8 @@ impl Component for ServersPage {
         self.list.handle_key(event, state)
     }
 
-    fn handle_mouse(&mut self, evt: MouseEvent, _state: &Store) -> Action {
-        self.list.handle_mouse(evt)
+    fn handle_mouse(&mut self, evt: MouseEvent, state: &Store) -> Action {
+        self.list.handle_mouse(evt, state)
     }
 
     fn update(&mut self, state: &Store, action: &Action) -> Action {

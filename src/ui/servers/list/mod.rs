@@ -5,6 +5,8 @@ mod recompute;
 mod selection;
 mod types;
 
+use std::time::Instant;
+
 use ratatui::{layout::Rect, widgets::TableState};
 
 pub(super) use types::{Density, SortMode};
@@ -21,6 +23,8 @@ pub(super) struct ServerList {
     pub scroll: usize,
     /// Screen rect of table body rows from last render (for mouse hit-testing).
     pub body_area: Rect,
+    /// Last left-click `(time, visible-row)` for double-click connect.
+    last_click: Option<(Instant, usize)>,
     /// Avoid rebuilding/sorting the index list every 60 Hz frame.
     recompute_key: RecomputeKey,
 }
@@ -46,6 +50,7 @@ impl ServerList {
             visible: Vec::new(),
             scroll: 0,
             body_area: Rect::default(),
+            last_click: None,
             recompute_key: RecomputeKey {
                 servers_epoch: u64::MAX, // force first recompute
                 latency_count: 0,

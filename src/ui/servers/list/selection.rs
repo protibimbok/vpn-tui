@@ -1,10 +1,14 @@
 //! Row selection, scroll window, and mouse clicks.
 
+use std::time::{Duration, Instant};
+
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
 use crate::{Action, Store, api::Server};
 
 use super::ServerList;
+
+const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 
 impl ServerList {
     /// Keep `scroll` such that the selected row stays inside a window of `page_size`.
@@ -52,7 +56,7 @@ impl ServerList {
         }
     }
 
-    pub fn handle_mouse(&mut self, evt: MouseEvent) -> Action {
+    pub fn handle_mouse(&mut self, evt: MouseEvent, state: &Store) -> Action {
         match evt.kind {
             MouseEventKind::ScrollUp => {
                 self.move_by(-1);
@@ -62,12 +66,12 @@ impl ServerList {
                 self.move_by(1);
                 Action::Ignore
             }
-            MouseEventKind::Down(MouseButton::Left) => self.select_at_mouse(evt),
+            MouseEventKind::Down(MouseButton::Left) => self.select_at_mouse(evt, state),
             _ => Action::None,
         }
     }
 
-    fn select_at_mouse(&mut self, evt: MouseEvent) -> Action {
+    fn select_at_mouse(&mut self, evt: MouseEvent, state: &Store) -> Action {
         if self.visible.is_empty() || self.body_area.height == 0 {
             return Action::Ignore;
         }
@@ -84,7 +88,23 @@ impl ServerList {
         if row >= self.visible.len() {
             return Action::Ignore;
         }
+
+        let now = Instant::now();
+        let is_double = matches!(
+            self.last_click,
+            Some((t, r)) if r == row && now.duration_since(t) <= DOUBLE_CLICK
+        );
         self.table_state.select(Some(row));
-        Action::Ignore
+
+        if is_double {
+            self.last_click = None;
+            match self.selected(state) {
+                Some(server) => Action::Connect(server.clone()),
+                None => Action::Ignore,
+            }
+        } else {
+            self.last_click = Some((now, row));
+            Action::Ignore
+        }
     }
 }
