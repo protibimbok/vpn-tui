@@ -72,6 +72,13 @@ impl ServerList {
         } else {
             &[][..]
         };
+        // Top border + header sit above body rows; cache for mouse hit-testing.
+        self.body_area = Rect {
+            x: area.x,
+            y: area.y.saturating_add(2),
+            width: area.width,
+            height: window.len() as u16,
+        };
 
         let range = if total == 0 {
             String::new()

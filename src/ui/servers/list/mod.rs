@@ -5,7 +5,7 @@ mod recompute;
 mod selection;
 mod types;
 
-use ratatui::widgets::TableState;
+use ratatui::{layout::Rect, widgets::TableState};
 
 pub(super) use types::{Density, SortMode};
 
@@ -19,6 +19,8 @@ pub(super) struct ServerList {
     pub visible: Vec<usize>,
     /// First visible index into `visible` (scroll window start).
     pub scroll: usize,
+    /// Screen rect of table body rows from last render (for mouse hit-testing).
+    pub body_area: Rect,
     /// Avoid rebuilding/sorting the index list every 60 Hz frame.
     recompute_key: RecomputeKey,
 }
@@ -43,6 +45,7 @@ impl ServerList {
             table_state: TableState::default().with_selected(Some(0)),
             visible: Vec::new(),
             scroll: 0,
+            body_area: Rect::default(),
             recompute_key: RecomputeKey {
                 servers_epoch: u64::MAX, // force first recompute
                 latency_count: 0,

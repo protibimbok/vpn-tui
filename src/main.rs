@@ -4,6 +4,10 @@ mod state;
 mod utils;
 mod ui;
 
+use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+use crossterm::execute;
+use std::io::stdout;
+
 use state::{Action, Store};
 use ui::{UIApp, UIEvent};
 
@@ -21,7 +25,10 @@ fn main() -> color_eyre::Result<()> {
     let runtime = tokio::runtime::Runtime::new()?;
 
     ratatui::run(|terminal| {
+        execute!(stdout(), EnableMouseCapture)?;
         let mut app = app::App::new();
-        runtime.block_on(app.run(terminal))
+        let result = runtime.block_on(app.run(terminal));
+        let _ = execute!(stdout(), DisableMouseCapture);
+        result
     })
 }
