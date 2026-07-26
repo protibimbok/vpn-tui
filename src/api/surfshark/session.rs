@@ -7,8 +7,9 @@ use base64::Engine;
 use serde::Deserialize;
 
 use super::auth::{register_public_key, renew_token as renew_auth};
-use super::error::{ApiError, Result};
-use super::servers::{fetch_servers, Server};
+use super::servers::fetch_servers;
+use crate::api::error::{ApiError, Result};
+use crate::api::servers::Server;
 
 /// Renew the access token this long before its JWT `exp` claim.
 const RENEW_MARGIN_SECS: u64 = 5 * 60;

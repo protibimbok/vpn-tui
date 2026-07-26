@@ -9,7 +9,7 @@ use std::{
 use qrcode::{Color, QrCode};
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::api::SURFSHARK_LOGIN_CODE_URL;
+use crate::api::surfshark::{self, LOGIN_CODE_URL};
 
 use super::Action;
 
@@ -27,7 +27,7 @@ impl CodeLogin {
     /// Builds the on-screen challenge and returns a cancel handle the caller
     /// clones into the background poller.
     pub fn new(code: String, ttl: Duration) -> (Self, Arc<AtomicBool>) {
-        let qr = str_to_qr_code(&format!("{SURFSHARK_LOGIN_CODE_URL}{code}"));
+        let qr = str_to_qr_code(&format!("{LOGIN_CODE_URL}{code}"));
         let cancel = Arc::new(AtomicBool::new(false));
         (
             Self {
@@ -57,9 +57,9 @@ pub fn poll_login_code(tx: &UnboundedSender<Action>, hash: &str, cancel: &Atomic
             }
             std::thread::sleep(Duration::from_millis(100));
         }
-        match crate::api::poll_login_code(hash) {
-            Ok(crate::api::PollResult::Pending) => {}
-            Ok(crate::api::PollResult::Approved(tokens)) => {
+        match surfshark::poll_login_code(hash) {
+            Ok(surfshark::PollResult::Pending) => {}
+            Ok(surfshark::PollResult::Approved(tokens)) => {
                 let _ = tx.send(Action::LoggedIn {
                     token: tokens.token,
                     renew_token: tokens.renew_token,

@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::api::{proton, Provider};
+use crate::api::{proton, surfshark, Provider};
 
 use super::{login, Action, CodeLogin, Store};
 
@@ -21,7 +21,7 @@ impl Store {
                 let provider = self.storage.provider;
                 tokio::task::spawn_blocking(move || {
                     let _ = match provider {
-                        Provider::Surfshark => match crate::api::login(&username, &password) {
+                        Provider::Surfshark => match surfshark::login(&username, &password) {
                             Ok(tokens) => tx.send(Action::LoggedIn {
                                 token: tokens.token,
                                 renew_token: tokens.renew_token,
@@ -96,7 +96,7 @@ impl Store {
                 self.error = None;
 
                 let tx = action_tx.clone();
-                tokio::task::spawn_blocking(move || match crate::api::create_login_code() {
+                tokio::task::spawn_blocking(move || match surfshark::create_login_code() {
                     Ok(lc) => {
                         let _ = tx.send(Action::CodeLoginReady {
                             code: lc.code,

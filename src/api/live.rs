@@ -4,7 +4,7 @@
 use super::error::Result;
 use super::proton::ProtonSession;
 use super::servers::Server;
-use super::session::AuthSession;
+use super::surfshark::AuthSession;
 
 /// Persistable token snapshot common to both providers (`uid` is Proton-only).
 pub struct Snapshot {

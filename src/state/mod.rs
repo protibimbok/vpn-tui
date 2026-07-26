@@ -10,6 +10,7 @@ use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::api::proton::{self, ProtonTokens};
+use crate::api::surfshark;
 use crate::api::{Provider, Server, Session};
 use crate::utils::{self, conf_path, generate_keypair, Storage, WgStatus};
 
@@ -147,7 +148,7 @@ impl Store {
             Provider::Surfshark => {
                 let pub_key = storage.data.public_key.clone().unwrap_or_default();
                 Session::Surfshark {
-                    auth: crate::api::AuthSession::new(token, renew_token),
+                    auth: surfshark::AuthSession::new(token, renew_token),
                     pub_key,
                 }
             }
@@ -206,7 +207,7 @@ impl Store {
             Provider::Surfshark => {
                 let pub_key = self.ensure_surfshark_keys();
                 Session::Surfshark {
-                    auth: crate::api::AuthSession::new(token, renew_token),
+                    auth: surfshark::AuthSession::new(token, renew_token),
                     pub_key,
                 }
             }

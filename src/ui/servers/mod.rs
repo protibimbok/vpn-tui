@@ -1,5 +1,3 @@
-//! Servers screen: list / search / connect. Layout adapts to terminal size.
-
 mod input;
 mod list;
 mod render;
@@ -17,9 +15,6 @@ pub struct ServersPage {
 }
 
 impl ServersPage {
-    /// Open the servers screen. Fetches from the network only when the
-    /// in-memory list is empty (no usable disk cache); otherwise the cache
-    /// is shown immediately. Press `r` to force a refresh.
     pub fn new(action_tx: UnboundedSender<Action>, servers_empty: bool) -> Self {
         if servers_empty {
             let _ = action_tx.send(Action::FetchServers);
