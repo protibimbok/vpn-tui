@@ -27,19 +27,6 @@ impl ServerList {
     }
 
     pub(in crate::ui::servers) fn is_connected(state: &Store, s: &Server) -> bool {
-        let Some(c) = state.connected.as_ref() else {
-            return false;
-        };
-        // Unique logical id: Proton `NL#54`, Surfshark connection hostname.
-        if c == &s.name || c == &s.connected_label() {
-            return true;
-        }
-        // Peer pubkey uniquely identifies the physical tunnel (Proton EntryIPs
-        // are shared across many logicals; city/country alone is not unique).
-        if let Some(pk) = crate::utils::wg::conf_peer_public_key(&crate::utils::conf_path()) {
-            return pk == s.wg_public_key;
-        }
-        // Legacy label / endpoint-only restore when conf isn't readable.
-        c == &s.display_name() || c.contains(&s.endpoint_host)
+        state.connected.as_deref() == Some(s.name.as_str())
     }
 }

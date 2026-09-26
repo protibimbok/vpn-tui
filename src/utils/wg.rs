@@ -20,11 +20,6 @@ const WG_PORT: u16 = 51820;
 
 pub type Result<T> = std::result::Result<T, String>;
 
-/// Call first thing in `main`, before any threads or files: when installed
-/// setuid-root, drop the effective uid back to the invoking user so the app
-/// itself (config files, network, workers) runs unprivileged. Root stays in
-/// the saved uid, from which [`root_command`] re-elevates individual
-/// `wg`/`wg-quick` children.
 pub fn drop_setuid_root() {
     let ruid = unsafe { libc::getuid() };
     if unsafe { libc::geteuid() } == 0 && ruid != 0 {
@@ -33,17 +28,12 @@ pub fn drop_setuid_root() {
     }
 }
 
-/// Whether the saved uid is root, i.e. we were started setuid-root and
-/// children can re-elevate without sudo.
 pub fn saved_root() -> bool {
     let (mut ruid, mut euid, mut suid) = (0, 0, 0);
     unsafe { libc::getresuid(&mut ruid, &mut euid, &mut suid) };
     suid == 0
 }
 
-/// Builds a command that will run as root: directly when we are root,
-/// re-elevating in the child when setuid-installed, else via `sudo -n`
-/// (-n: never prompt; a password prompt would corrupt the TUI).
 fn root_command(args: &[&str]) -> Command {
     if unsafe { libc::geteuid() } == 0 {
         let mut cmd = Command::new(args[0]);
@@ -124,16 +114,11 @@ pub fn down(conf: &Path) -> Result<()> {
 #[derive(Clone, Debug)]
 pub struct Status {
     pub endpoint: String,
-    /// `None` when `wg show` isn't available unprivileged (sysfs fallback).
     pub handshake_unix: Option<u64>,
     pub rx: u64,
     pub tx: u64,
 }
 
-/// `None` when the interface is down. `wg show` needs CAP_NET_ADMIN, so it
-/// runs only when root comes free (already root, or setuid-installed);
-/// otherwise traffic counters come from sysfs and the endpoint from our own
-/// conf, which covers everything except the handshake time.
 pub fn status(conf: &Path) -> Option<Status> {
     let sys = Path::new("/sys/class/net").join(IFACE);
     if !sys.exists() {
@@ -183,11 +168,6 @@ fn wg_dump() -> Option<Status> {
 
 fn conf_endpoint(conf: &Path) -> String {
     conf_field(conf, "Endpoint = ").unwrap_or_default()
-}
-
-/// Peer `PublicKey` from our written conf — unique even when Proton EntryIPs are shared.
-pub fn conf_peer_public_key(conf: &Path) -> Option<String> {
-    conf_field(conf, "PublicKey = ")
 }
 
 fn conf_field(conf: &Path, prefix: &str) -> Option<String> {
